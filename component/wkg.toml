@@ -1,0 +1,2 @@
+[overrides]
+"mattilsynet:h8s-provider" = { path = "../wit" }

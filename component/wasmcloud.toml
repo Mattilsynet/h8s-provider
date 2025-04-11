@@ -1,0 +1,9 @@
+name = "h8s-provider-test-component"
+language = "tinygo"
+type = "component"
+version = "0.1.0"
+
+[component]
+wit_world = "component"
+wasm_target = "wasm32-wasip2"
+destination = "build/h8s-provider-test-component_s.wasm"

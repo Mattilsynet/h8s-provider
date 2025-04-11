@@ -1,0 +1,6 @@
+package mattilsynet:h8s-provider-test-component;
+
+world component {
+  export mattilsynet:h8s-provider/request-reply@0.1.0;
+  include wasmcloud:component-go/imports@0.1.0;
+}

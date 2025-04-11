@@ -1,0 +1,25 @@
+package mattilsynet:h8s-provider@0.1.0;
+
+interface types {
+    record key-value {
+        key: string,
+        value: list<string>,
+    }
+    record msg {
+        headers: list<key-value>,
+        data: list<u8>,
+        reply: string,
+        subject: string,
+    }
+}
+
+interface request-reply  {
+    use types.{msg};
+    handle-message: func(msg: msg) -> result<msg, string>;
+}
+
+world h8s-provider {
+  import request-reply;
+  // ws, component sends data
+  // export request-reply; 
+}

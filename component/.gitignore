@@ -1,0 +1,4 @@
+bindings/
+gen/*
+build/*
+wit/deps

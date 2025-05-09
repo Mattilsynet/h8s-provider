@@ -2,5 +2,7 @@ package mattilsynet:h8s-provider-test-component;
 
 world component {
   export mattilsynet:h8s-provider/request-reply@0.1.0;
+  export mattilsynet:cronjob/cronjob@0.0.1;
+  import mattilsynet:h8s-provider/sender@0.1.0;
   include wasmcloud:component-go/imports@0.1.0;
 }

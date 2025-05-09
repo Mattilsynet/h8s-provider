@@ -1,0 +1,142 @@
+name: build_push
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  wash-build:
+    runs-on: ubuntu-latest
+    env:
+      providername: h8s-provider 
+    permissions:
+      contents: "write"
+      packages: "write"
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: install go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.0"
+      - name: install tinygo
+        uses: acifani/setup-tinygo@v2
+        with:
+          tinygo-version: "0.37.0"
+          install-binaryen: "false"
+      - name: install wash tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-tools@1.225.0, wash-cli
+      - name: install wit-bindgen-wrpc
+        shell: bash
+        run: |
+          curl -LO https://github.com/bytecodealliance/wrpc/releases/download/v0.11.1/wit-bindgen-wrpc-x86_64-unknown-linux-musl;
+          mv wit-bindgen-wrpc-x86_64-unknown-linux-musl wit-bindgen-wrpc
+          chmod +x wit-bindgen-wrpc
+          install -m 755 wit-bindgen-wrpc /usr/local/bin/
+      
+      - name: download dependencies 
+        shell: bash
+        run: |
+          go mod tidy
+      - name: validate-yaml
+        shell: bash
+        run: |
+          [[ ! -f wadm.yaml ]] || wash app validate wadm.yaml
+          [[ ! -f local.wadm.yaml ]] || wash app validate local.wadm.yaml
+      - name: wash build provider
+        shell: bash
+        run: |
+          wash build
+      - name: go crosscompile
+        shell: bash
+        run: |
+          GOOS=darwin GOARCH=arm64 go build -o darwin main.go provider.go  
+          GOOS=windows GOARCH=amd64 go build -o windows.exe main.go provider.go
+      - name: wash par insert binaries
+        shell: bash
+        run: |
+          wash par insert ./build/${{env.providername}}.par.gz --binary ./darwin --arch aarch64-macos 
+          wash par insert ./build/${{env.providername}}.par.gz --binary ./windows.exe --arch x86_64-windows
+      - name: wash build test-component
+        shell: bash
+        run: |
+          go mod tidy
+          wash build
+        working-directory: component
+      - name: test provider load
+        shell: bash
+        run: |
+          set -xe
+          wash up &
+          WASH_PID=$!
+          sleep 4;
+          wash app deploy local.wadm.yaml;
+          TRIES=0
+          while [[ $(wash get inventory --output=json | jq '.inventories[0].providers | length') -eq 0 ]] ; do
+            if [[ $TRIES -gt 10 ]]; then
+              echo ":x: failed to find provider in inventory output after deploying example manifest";
+              exit -1;
+            fi
+            TRIES=$((TRIES+1));
+            sleep 1;
+          done;
+          echo ":white_check_mark: successfully started at least one provider";
+          wash app delete local.wadm.yaml;
+          kill $WASH_PID;
+          exit 0;
+      - name: Setup registry
+        env:
+          WASH_REG_USER: ${{ github.actor }}
+          WASH_REG_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          cat << EOF > package_config.toml
+          [namespace_registries]
+          mattilsynet = "ghcr.io"
+
+          [registry."ghcr.io".oci]
+          auth = { username = "${WASH_REG_USER}", password = "${WASH_REG_PASSWORD}"}
+          EOF
+          echo "WASH_PACKAGE_CONFIG_FILE=$(realpath package_config.toml)" >> $GITHUB_ENV
+      - name: publish package to github repository
+        env:
+          WASH_REG_USER: ${{ github.repository_owner }}
+          WASH_REG_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          wash push ghcr.io/${{ github.repository }}:${{ github.ref_name }} ${{ env.providername }}.par.gz --annotation org.opencontainers.image.source=${{github.server_url}}/${{ github.repository }}
+        working-directory:
+          build
+          #INFO: create tar.gz
+      - name: Create tar.gz
+        run: |
+          tar -czf ${{ env.providername }}.tar.gz ./build/${{ env.providername }}.par.gz
+      - name: build wit
+        run: wash wit build
+      - name: publish wit
+        run: wash wit publish *.wasm
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }} # Tag that triggered the workflow
+          release_name: ${{ github.ref_name }}
+          draft: false
+          prerelease:
+            false
+            #INFO: Publish to github archives, as tar.gz, as that's what deps.toml from components need
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./${{ env.providername }}.tar.gz # Path to your file
+          asset_name: ${{ env.providername }}
+          asset_content_type: application/gzip
+
+          #TODO: run wash up, wash apply and check output for success messages

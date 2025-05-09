@@ -1,10 +1,10 @@
 module github.com/Mattilsynet/h8s-provider
 
-go 1.23.0
-
-toolchain go1.24.0
+go 1.24.0
 
 require (
+	github.com/Mattilsynet/h8s v0.0.0-20250415102616-2ebbafdee121
+	github.com/nats-io/nats.go v1.41.1
 	go.wasmcloud.dev/provider v0.0.6
 	wrpc.io/go v0.1.0
 )
@@ -16,7 +16,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
-	github.com/nats-io/nats.go v1.41.0 // indirect
 	github.com/nats-io/nkeys v0.4.10 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect

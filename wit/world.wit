@@ -15,11 +15,32 @@ interface types {
 
 interface request-reply  {
     use types.{msg};
+
     handle-message: func(msg: msg) -> result<msg, string>;
+}
+
+// Got no better name currently
+interface sender {
+    use types.{msg};
+
+    // The provider keeps state of connection. You can get all of them
+    // or some of them by h8s subject conventions. 
+    get-connections: func() -> result<list<msg>, string>;
+    get-connections-by-subject: func(subject: string) -> result<list<msg>, string>;
+
+    // Can send a message to an existing connection based on string identifying the connection.
+    send: func(conn: string, payload: list<u8>) -> result<_, string>;
+}
+
+interface receiver {
+    use types.{msg};
+
+    // No connection state is required, all request/payload information is contained in the message.
+    receive: func() -> result<msg, string>;
 }
 
 world h8s-provider {
   import request-reply;
-  // ws, component sends data
-  // export request-reply; 
+  import receiver;
+  export sender;
 }

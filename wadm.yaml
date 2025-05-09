@@ -21,18 +21,26 @@ spec:
         - type: spreadscaler
           properties:
             instances: 1
-
+        # - type: link
+        #   properties:
+        #     target:
+        #       name: h8s-provider
+        #     namespace: mattilsynet
+        #     package: h8s-provider
+        #     interfaces: [sender]
+        #     source_config:
+        #       - name: websocket-sender
+        #         properties:
+        #           host: "localhost"
+        #           path: "/feed/toclient"
+        #           method: "ws"
+        #
     - name: h8s-provider 
       type: capability
       properties:
         image: file://./build/h8s-provider.par.gz
         id: h8s-provider 
       traits:
-        # Link the provider to the component on wasmcloud:example/process-data
-        #
-        # Create a uni-directional link from the custom-template provider (the "source") to 
-        # the `test-component` component (the "target"), so that the provider can call functions in the
-        # wasmcloud:example/process-data interface on `test-component`.
         - type: link
           properties:
             target:
@@ -43,6 +51,36 @@ spec:
             source_config:
               - name: test-subjects 
                 properties:
-                  host: "www.example.com"
-                  paths: "/hello/world, /goodby/world"
+                  host: "localhost"
+                  path: "/hello/world"
+                  method: "GET"
+        # - type: link
+        #   properties:
+        #     target:
+        #       name: h8s-provider-test-component 
+        #     namespace: mattilsynet 
+        #     package: h8s-provider 
+        #     interfaces: [receiver]
+        #     source_config:
+        #       - name: websocket-receiver 
+        #         properties:
+        #           host: "localhost"
+        #           path: "/feed/fromclient"
+        #           method: "ws"
+        #
+    - name: cronjob
+      type: capability
+      properties:
+        image: ghcr.io/mattilsynet/map-cronjob-provider-wc:v0.0.34
+      traits:
+        - type: link
+          properties:
+            target: h8s-provider-test-component 
+            namespace: mattilsynet
+            package: cronjob 
+            interfaces: [cron-handler]
+            source_config:
+              - name: log-component-cron-expression
+                properties:
+                  expression: "@every 5s"
 

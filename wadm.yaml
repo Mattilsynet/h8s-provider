@@ -21,20 +21,19 @@ spec:
         - type: spreadscaler
           properties:
             instances: 1
-        # - type: link
-        #   properties:
-        #     target:
-        #       name: h8s-provider
-        #     namespace: mattilsynet
-        #     package: h8s-provider
-        #     interfaces: [sender]
-        #     source_config:
-        #       - name: websocket-sender
-        #         properties:
-        #           host: "localhost"
-        #           path: "/feed/toclient"
-        #           method: "ws"
-        #
+        - type: link
+          properties:
+            target:
+              name: h8s-provider
+            namespace: mattilsynet
+            package: h8s-provider
+            interfaces: [sender]
+            # source_config:
+            #   - name: websocket-sender
+            #     properties:
+            #       host: "localhost"
+            #       path: "/feed/toclient"
+            #       method: "ws"
     - name: h8s-provider 
       type: capability
       properties:

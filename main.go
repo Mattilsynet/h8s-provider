@@ -4,12 +4,12 @@ package main
 
 import (
 	"fmt"
+	server "github.com/Mattilsynet/h8s-provider/bindings"
+	"go.wasmcloud.dev/provider"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"go.wasmcloud.dev/provider"
 )
 
 func main() {
@@ -22,11 +22,11 @@ func run() error {
 	// Initialize the provider with callbacks to track linked components
 	providerHandler := NewH8SHandler()
 	p, err := provider.New(
-		//		provider.SourceLinkPut(func(link provider.InterfaceLinkDefinition) error {
-		//			return handleNewSourceLink(providerHandler, link)
-		//		}),
 		provider.SourceLinkPut(func(link provider.InterfaceLinkDefinition) error {
 			return providerHandler.AddComponent(link)
+		}),
+		provider.TargetLinkPut(func(link provider.InterfaceLinkDefinition) error {
+			return providerHandler.AddSenderComponent(link)
 		}),
 		//		provider.SourceLinkDel(func(link provider.InterfaceLinkDefinition) error {
 		//			return handleDelSourceLink(providerHandler, link)
@@ -51,6 +51,8 @@ func run() error {
 	providerCh := make(chan error, 1)
 	signalCh := make(chan os.Signal, 1)
 
+	stopFunc, err := server.Serve(p.RPCClient, providerHandler)
+
 	// Handle control interface operations
 	go func() {
 		startErr := p.Start()
@@ -61,11 +63,11 @@ func run() error {
 	// Run provider until either a shutdown is requested or a SIGINT is received
 	select {
 	case err = <-providerCh:
-		//		stopFunc()
+		stopFunc()
 		return err
 	case <-signalCh:
 		p.Shutdown()
-		//		stopFunc()
+		stopFunc()
 	}
 	return nil
 }

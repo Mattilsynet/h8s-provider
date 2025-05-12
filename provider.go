@@ -12,6 +12,7 @@ import (
 	"github.com/Mattilsynet/h8s/pkg/subjectmapper"
 	"github.com/nats-io/nats.go"
 	"go.wasmcloud.dev/provider"
+	wrpc "wrpc.io/go"
 )
 
 var (
@@ -32,6 +33,9 @@ type H8SHandler struct {
 	linkedTo            map[string]map[string]string
 	natsConnByComponent map[string]*nats.Conn
 	subsByComponent     map[string]string
+
+	websocketSubjectByConnection  map[string]string
+	websocketConnectionsBySubject map[string][]string
 }
 
 func NewH8SHandler() *H8SHandler {
@@ -50,7 +54,8 @@ func NewH8SHandler() *H8SHandler {
 }
 
 func (h8s *H8SHandler) AddSenderComponent(link provider.InterfaceLinkDefinition) error {
-	//sender.
+	h8s.provider.Logger.Info("Handling new target link", "link", link)
+
 	return nil
 }
 
@@ -106,6 +111,23 @@ func (h8s *H8SHandler) addRequestReplyComponent(link provider.InterfaceLinkDefin
 	h8s.Run(link.Target)
 	return nil
 
+}
+
+func (h8s *H8SHandler) GetConnections(context.Context) (*wrpc.Result[[]*types.Msg, string], error) {
+
+	// return the nats msg of the initial handshake that we persist
+	// in the handler keyed on conneciton.
+
+	return nil, nil
+}
+
+func (h8s *H8SHandler) GetConnectionsBySubject(context context.Context, subject string) (*wrpc.Result[[]*types.Msg, string], error) {
+
+	return nil, nil
+}
+
+func (h8s *H8SHandler) Send(context context.Context, conn string, payload []uint8) (*wrpc.Result[struct{}, string], error) {
+	return nil, nil
 }
 
 func (h8s *H8SHandler) RemoveComponent(link provider.InterfaceLinkDefinition) error {

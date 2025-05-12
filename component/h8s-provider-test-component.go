@@ -11,14 +11,25 @@ import (
 )
 
 func init() {
+	// When cronjob triggers component, get all websocket connections
+	// And send some bytes to all of them to demonstrate bidirectional
+	// communication.
 	cronjob.Exports.CronHandler = func() {
 		logger := wasilog.ContextLogger("cronjob-handler")
 		logger.Info("Cronjob handler called")
 
-		cons := sender.GetConnections()
-		for _, con := range cons {
-			sender.Send()
+		result := sender.GetConnections()
+		if result.OK().Len() == 0 {
+			logger.Info("nobody is connected")
+			return
 		}
+
+		for _, conn := range result.OK().Slice() {
+			list := cm.ToList([]uint8("stuff"))
+			sender.Send(conn.Reply, list)
+
+		}
+
 	}
 
 	requestreply.Exports.HandleMessage = func(msg requestreply.Msg) (result cm.Result[requestreply.MsgShape, types.Msg, string]) {

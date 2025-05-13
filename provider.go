@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/Mattilsynet/h8s-provider/bindings/mattilsynet/h8s_provider/request_reply"
 	"github.com/Mattilsynet/h8s-provider/bindings/mattilsynet/h8s_provider/types"
@@ -34,8 +35,8 @@ type H8SHandler struct {
 	natsConnByComponent map[string]*nats.Conn
 	subsByComponent     map[string]string
 
-	websocketSubjectByConnection  map[string]string
-	websocketConnectionsBySubject map[string][]string
+	subjectBySenderComponent      map[string]string               // [subject][target.name] = target
+	websocketConnectionsBySubject map[string]map[string]*nats.Msg // [subject][connection] = NATS message
 }
 
 func NewH8SHandler() *H8SHandler {
@@ -43,12 +44,14 @@ func NewH8SHandler() *H8SHandler {
 		linkedFrom: make(map[string]map[string]string),
 		linkedTo:   make(map[string]map[string]string),
 
-		// Holds NATS connection for components that might
-		// diffrent credentials and diffrent NATS infrastructure.
+		// Holds NATS connection for components that might use
+		// diffrent credentials and different NATS infrastructure.
 		natsConnByComponent: make(map[string]*nats.Conn),
 
 		// Map that holds subscribe filters for a component.
-		subsByComponent: make(map[string]string),
+		subsByComponent:               make(map[string]string),
+		subjectBySenderComponent:      make(map[string]string),
+		websocketConnectionsBySubject: make(map[string]map[string]*nats.Msg),
 	}
 	return handler
 }
@@ -117,7 +120,7 @@ func (h8s *H8SHandler) addRequestReplyComponent(link provider.InterfaceLinkDefin
 		len(link.SourceConfig["path"]) == 0 ||
 		len(link.SourceConfig["method"]) == 0 {
 
-		h8s.provider.Logger.Error("invalid target config", "error", errInvalidSourceConfigProperties)
+		h8s.provider.Logger.Error("invalid SourceConfig", "error", errInvalidSourceConfigProperties)
 		return errors.New(errInvalidSourceConfigProperties)
 	}
 
@@ -137,21 +140,43 @@ func (h8s *H8SHandler) addRequestReplyComponent(link provider.InterfaceLinkDefin
 
 	h8s.subsByComponent[link.Target] = subject.PublishSubject()
 	h8s.provider.Logger.Debug("subscribed to subjects", "subject", h8s.subsByComponent[link.Target])
-	h8s.Run(link.Target)
+	h8s.runRequestReplyHandler(link.Target)
 	return nil
 
 }
 
+// addSenderComponent builds up the list of components keyed by their h8s conventional
+// publish subjects. We will use this for building a map and track actual connections from h8s.
 func (h8s *H8SHandler) addSenderComponent(link provider.InterfaceLinkDefinition) error {
+	if len(link.SourceConfig["host"]) == 0 ||
+		len(link.SourceConfig["path"]) == 0 ||
+		len(link.SourceConfig["method"]) == 0 {
+
+		h8s.provider.Logger.Error("invalid SourceConfig", "error", errInvalidSourceConfigProperties)
+		return errors.New(errInvalidSourceConfigProperties)
+	}
+
+	url := fmt.Sprintf("%s://%s%s", link.SourceConfig["method"], link.SourceConfig["host"], link.SourceConfig["path"])
+
+	mapper := subjectmapper.NewWebSocketMap(url)
+	h8s.subjectBySenderComponent[link.Target] = mapper.WebSocketPublishSubject()
+	h8s.provider.Logger.Info("watching for connections on subject", "subject", mapper.WebSocketPublishSubject())
+	h8s.runSenderHandler(link.Target)
 	return nil
 }
 
 func (h8s *H8SHandler) GetConnections(context.Context) (*wrpc.Result[[]*types.Msg, string], error) {
+	var connections []*types.Msg
 
-	// return the nats msg of the initial handshake that we persist
-	// in the handler keyed on conneciton.
+	for subject, value := range h8s.websocketConnectionsBySubject {
+		h8s.provider.Logger.Info("finding connections for subject", "subject", subject)
+		for conn, msg := range value {
+			h8s.provider.Logger.Info("found connection", "connection", conn)
+			connections = append(connections, natsMsgToWasmMsg(msg))
+		}
 
-	return nil, nil
+	}
+	return &wrpc.Result[[]*types.Msg, string]{&connections, nil}, nil
 }
 
 func (h8s *H8SHandler) GetConnectionsBySubject(context context.Context, subject string) (*wrpc.Result[[]*types.Msg, string], error) {
@@ -165,11 +190,37 @@ func (h8s *H8SHandler) Send(context context.Context, conn string, payload []uint
 }
 
 func (h8s *H8SHandler) RemoveComponent(link provider.InterfaceLinkDefinition) error {
-	h8s.provider.Logger.Info("handling target link delete", "link", link)
+	h8s.provider.Logger.Info("handling target link delete", "link", link.Name)
+
 	return nil
 }
 
-func (h8s *H8SHandler) Run(target string) error {
+// runSenderHandler will subscribe to nats and listen for websocket connections and build up
+// the internal h8s-provider state.
+// todo: this is simlar to the receiver needs, check this again when we get to that.
+func (h8s *H8SHandler) runSenderHandler(target string) error {
+	nc, err := nats.Connect("nats://localhost:4222", nats.Name("h8s-provider-request-reply"))
+	if err != nil {
+		return errors.New("failed to connect to NATS server")
+	}
+
+	subject := h8s.subjectBySenderComponent[target]
+
+	_, subErr := nc.Subscribe(subject, func(msg *nats.Msg) {
+		h8s.provider.Logger.Info("Received message", "subject", msg.Subject, "data", msg.Data)
+
+		h8s.websocketConnectionsBySubject[msg.Subject][msg.Reply] = msg
+		h8s.provider.Logger.Info("Added websocket connection", "connection", msg.Reply, "subject", msg.Subject)
+	})
+	if subErr != nil {
+		h8s.provider.Logger.Error("failed to subscribe to subject", "subject", subject, "error", err)
+		return err
+	}
+	h8s.provider.Logger.Info("Subscribed to subject", "subject", subject)
+	return nil
+}
+
+func (h8s *H8SHandler) runRequestReplyHandler(target string) error {
 	// Get the NATS connection for the target component
 	/*
 		nc, ok := h8s.natsConnByComponent[target]
@@ -179,7 +230,7 @@ func (h8s *H8SHandler) Run(target string) error {
 			return errors.New("no NATS connection found for target")
 		}
 	*/
-	nc, err := nats.Connect("nats://localhost:4222", nats.Name("h8s-provider"))
+	nc, err := nats.Connect("nats://localhost:4222", nats.Name("h8s-provider-request-reply"))
 	if err != nil {
 		return errors.New("failed to connect to NATS server")
 	}
@@ -191,23 +242,11 @@ func (h8s *H8SHandler) Run(target string) error {
 		h8s.provider.Logger.Info("Received message", "subject", msg.Subject, "data", string(msg.Data))
 		wrpcclient := h8s.provider.OutgoingRpcClient(target)
 
-		// Convert NATS message to wasmcloud types.Msg
-		newHeaders := []*types.KeyValue{}
-		for k, v := range msg.Header {
-			newHeaders = append(newHeaders, &types.KeyValue{
-				Key:   k,
-				Value: v,
-			})
-		}
-		newMsg := types.Msg{
-			Headers: newHeaders,
-			Data:    msg.Data,
-			Subject: msg.Subject,
-			Reply:   msg.Reply,
-		}
+		newMsg := natsMsgToWasmMsg(msg)
+
 		mapOfInboxesVsComponents := make(map[string]string)
 		mapOfInboxesVsComponents[target] = msg.Reply
-		result, hmErr := request_reply.HandleMessage(context.Background(), wrpcclient, &newMsg)
+		result, hmErr := request_reply.HandleMessage(context.Background(), wrpcclient, newMsg)
 		if hmErr != nil {
 			h8s.provider.Logger.Error("failed to handle message", "error", err)
 			return
@@ -251,6 +290,36 @@ func (h *H8SHandler) Shutdown() {
 			h.Stop(target)
 		}
 	*/
+}
+
+func wasmMsgToNatsMsg(msg *types.Msg) *nats.Msg {
+	natsmsg := &nats.Msg{}
+
+	for _, v := range msg.Headers {
+		natsmsg.Header.Add(v.Key, strings.Join(v.Value, ", "))
+	}
+
+	natsmsg.Data = msg.Data
+	natsmsg.Subject = msg.Subject
+	natsmsg.Reply = msg.Reply
+	return natsmsg
+}
+
+func natsMsgToWasmMsg(msg *nats.Msg) *types.Msg {
+	// Convert NATS message to wasmcloud types.Msg
+	newHeaders := []*types.KeyValue{}
+	for k, v := range msg.Header {
+		newHeaders = append(newHeaders, &types.KeyValue{
+			Key:   k,
+			Value: v,
+		})
+	}
+	return &types.Msg{
+		Headers: newHeaders,
+		Data:    msg.Data,
+		Subject: msg.Subject,
+		Reply:   msg.Reply,
+	}
 }
 
 // validateInterfaces() validates (duh) a list of interfaces on a link

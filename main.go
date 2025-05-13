@@ -23,10 +23,10 @@ func run() error {
 	providerHandler := NewH8SHandler()
 	p, err := provider.New(
 		provider.SourceLinkPut(func(link provider.InterfaceLinkDefinition) error {
-			return providerHandler.AddComponent(link)
+			return providerHandler.AddSourceLinkComponent(link)
 		}),
 		provider.TargetLinkPut(func(link provider.InterfaceLinkDefinition) error {
-			return providerHandler.AddSenderComponent(link)
+			return providerHandler.AddTargetLinkComponent(link)
 		}),
 		//		provider.SourceLinkDel(func(link provider.InterfaceLinkDefinition) error {
 		//			return handleDelSourceLink(providerHandler, link)

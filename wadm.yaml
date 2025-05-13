@@ -1,10 +1,10 @@
 apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
-  name: h8s-provider 
+  name: h8s-provider
   annotations:
     version: v0.0.1
-    description: 'Provider to use h8s and provide http and websocket data over NATS'
+    description: "Provider to use h8s and provide http and websocket data over NATS"
     wasmcloud.dev/authors: Mattilsynet
     wasmcloud.dev/source-url: https://github.com/Mattilsynet/h8s-provider'
     wasmcloud.dev/readme-md-url: https://github.com/Mattilsynet/h8s-provider/README.md'
@@ -13,7 +13,7 @@ metadata:
       capability-provider,provider,h8s,httptonats,tinygo,golang
 spec:
   components:
-    - name: h8s-provider-test-component 
+    - name: h8s-provider-test-component
       type: component
       properties:
         image: file://./component/build/h8s-provider-test-component_s.wasm
@@ -34,21 +34,21 @@ spec:
             #       host: "localhost"
             #       path: "/feed/toclient"
             #       method: "ws"
-    - name: h8s-provider 
+    - name: h8s-provider
       type: capability
       properties:
         image: file://./build/h8s-provider.par.gz
-        id: h8s-provider 
+        id: h8s-provider
       traits:
         - type: link
           properties:
             target:
-              name: h8s-provider-test-component 
-            namespace: mattilsynet 
-            package: h8s-provider 
+              name: h8s-provider-test-component
+            namespace: mattilsynet
+            package: h8s-provider
             interfaces: [request-reply]
             source_config:
-              - name: test-subjects 
+              - name: test-subjects
                 properties:
                   host: "localhost"
                   path: "/hello/world"
@@ -56,12 +56,12 @@ spec:
         # - type: link
         #   properties:
         #     target:
-        #       name: h8s-provider-test-component 
-        #     namespace: mattilsynet 
-        #     package: h8s-provider 
+        #       name: h8s-provider-test-component
+        #     namespace: mattilsynet
+        #     package: h8s-provider
         #     interfaces: [receiver]
         #     source_config:
-        #       - name: websocket-receiver 
+        #       - name: websocket-receiver
         #         properties:
         #           host: "localhost"
         #           path: "/feed/fromclient"
@@ -74,12 +74,11 @@ spec:
       traits:
         - type: link
           properties:
-            target: h8s-provider-test-component 
+            target: h8s-provider-test-component
             namespace: mattilsynet
-            package: cronjob 
+            package: cronjob
             interfaces: [cron-handler]
             source_config:
               - name: log-component-cron-expression
                 properties:
                   expression: "@every 5s"
-

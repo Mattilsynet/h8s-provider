@@ -53,18 +53,47 @@ func NewH8SHandler() *H8SHandler {
 	return handler
 }
 
-func (h8s *H8SHandler) AddSenderComponent(link provider.InterfaceLinkDefinition) error {
+func (h8s *H8SHandler) AddTargetLinkComponent(link provider.InterfaceLinkDefinition) error {
 	h8s.provider.Logger.Info("Handling new target link", "link", link)
+
+	ok, valid, invalid := validateInterfaces(validExportInterfaces, link.Interfaces)
+	if !ok {
+		h8s.provider.Logger.Error(
+			"invalid target link",
+			"error",
+			"target link contains no valid interfaces for this provider",
+			"valid interfaces", validImportInterfaces,
+			"invalid values", invalid,
+		)
+	}
+
+	for _, item := range valid {
+		switch item {
+		case "sender":
+			h8s.addSenderComponent(link)
+		default:
+			h8s.provider.Logger.Warn(
+				"unexpected valid interface",
+				"warning", "target link contained valid but unhandled interface",
+				"interface", item,
+			)
+		}
+	}
 
 	return nil
 }
 
-func (h8s *H8SHandler) AddComponent(link provider.InterfaceLinkDefinition) error {
+func (h8s *H8SHandler) AddSourceLinkComponent(link provider.InterfaceLinkDefinition) error {
 	h8s.provider.Logger.Info("Handling new source link", "link", link)
 
-	ok, valid, invalid := validateInterfaces(validExportInterfaces, link.Interfaces)
+	ok, valid, invalid := validateInterfaces(validImportInterfaces, link.Interfaces)
 	if !ok {
-		h8s.provider.Logger.Error("invalid source link", "error", "source link contains no valid interfaces for this provider", "valid interfaces", validExportInterfaces, "invalid values", invalid)
+		h8s.provider.Logger.Error(
+			"invalid source link",
+			"error", "source link contains no valid interfaces for this provider",
+			"valid interfaces", validExportInterfaces,
+			"invalid values", invalid,
+		)
 		return errors.New("invalid source link, link contained no valid interfaces")
 	}
 
@@ -113,6 +142,10 @@ func (h8s *H8SHandler) addRequestReplyComponent(link provider.InterfaceLinkDefin
 
 }
 
+func (h8s *H8SHandler) addSenderComponent(link provider.InterfaceLinkDefinition) error {
+	return nil
+}
+
 func (h8s *H8SHandler) GetConnections(context.Context) (*wrpc.Result[[]*types.Msg, string], error) {
 
 	// return the nats msg of the initial handshake that we persist
@@ -127,6 +160,7 @@ func (h8s *H8SHandler) GetConnectionsBySubject(context context.Context, subject 
 }
 
 func (h8s *H8SHandler) Send(context context.Context, conn string, payload []uint8) (*wrpc.Result[struct{}, string], error) {
+
 	return nil, nil
 }
 

@@ -35,8 +35,8 @@ type H8SHandler struct {
 	natsConnByComponent map[string]*nats.Conn
 	subsByComponent     map[string]string
 
-	subjectBySenderComponent      map[string]string               // [subject][target.name] = target
-	websocketConnectionsBySubject map[string]map[string]*nats.Msg // [subject][connection] = NATS message
+	subjectBySenderComponent map[string]string    // [subject][target.name] = target
+	websocketConnections     map[string]*nats.Msg // [subject][connection] = NATS message
 }
 
 func NewH8SHandler() *H8SHandler {
@@ -49,9 +49,9 @@ func NewH8SHandler() *H8SHandler {
 		natsConnByComponent: make(map[string]*nats.Conn),
 
 		// Map that holds subscribe filters for a component.
-		subsByComponent:               make(map[string]string),
-		subjectBySenderComponent:      make(map[string]string),
-		websocketConnectionsBySubject: make(map[string]map[string]*nats.Msg),
+		subsByComponent:          make(map[string]string),
+		subjectBySenderComponent: make(map[string]string),
+		websocketConnections:     make(map[string]*nats.Msg),
 	}
 	return handler
 }
@@ -168,13 +168,8 @@ func (h8s *H8SHandler) addSenderComponent(link provider.InterfaceLinkDefinition)
 func (h8s *H8SHandler) GetConnections(context.Context) (*wrpc.Result[[]*types.Msg, string], error) {
 	var connections []*types.Msg
 
-	for subject, value := range h8s.websocketConnectionsBySubject {
-		h8s.provider.Logger.Info("finding connections for subject", "subject", subject)
-		for conn, msg := range value {
-			h8s.provider.Logger.Info("found connection", "connection", conn)
-			connections = append(connections, natsMsgToWasmMsg(msg))
-		}
-
+	for _, msg := range h8s.websocketConnections {
+		connections = append(connections, natsMsgToWasmMsg(msg))
 	}
 	return &wrpc.Result[[]*types.Msg, string]{&connections, nil}, nil
 }
@@ -184,9 +179,31 @@ func (h8s *H8SHandler) GetConnectionsBySubject(context context.Context, subject 
 	return nil, nil
 }
 
-func (h8s *H8SHandler) Send(context context.Context, conn string, payload []uint8) (*wrpc.Result[struct{}, string], error) {
+func (h8s *H8SHandler) Send(ctx context.Context, conn string, payload []byte) (*wrpc.Result[string, string], error) {
+	connInfo, ok := h8s.websocketConnections[conn]
+	if !ok {
+		h8s.provider.Logger.Error("no websocket connection found", "conn", conn)
+		return nil, fmt.Errorf("connection %s not found ", conn)
+	}
 
-	return nil, nil
+	if connInfo.Reply == "" {
+		h8s.provider.Logger.Error("reply subject is empty", "conn", conn)
+		return nil, errors.New("reply subject is empty")
+	}
+
+	nc, err := nats.Connect("nats://localhost:4222", nats.Name("h8s-provider-send-method"))
+	if err != nil {
+		h8s.provider.Logger.Error("unable to connect to NATS", "error", err)
+		return nil, err
+	}
+	defer nc.Close()
+
+	if err := nc.Publish(connInfo.Reply, payload); err != nil {
+		h8s.provider.Logger.Error("failed to publish payload", "error", err, "reply", connInfo.Reply)
+		return nil, err
+	}
+	okstring := "bytes sent"
+	return &wrpc.Result[string, string]{Ok: &okstring}, nil
 }
 
 func (h8s *H8SHandler) RemoveComponent(link provider.InterfaceLinkDefinition) error {
@@ -207,9 +224,7 @@ func (h8s *H8SHandler) runSenderHandler(target string) error {
 	subject := h8s.subjectBySenderComponent[target]
 
 	_, subErr := nc.Subscribe(subject, func(msg *nats.Msg) {
-		h8s.provider.Logger.Info("Received message", "subject", msg.Subject, "data", msg.Data)
-
-		h8s.websocketConnectionsBySubject[msg.Subject][msg.Reply] = msg
+		h8s.websocketConnections[msg.Reply] = msg
 		h8s.provider.Logger.Info("Added websocket connection", "connection", msg.Reply, "subject", msg.Subject)
 	})
 	if subErr != nil {

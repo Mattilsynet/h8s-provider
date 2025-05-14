@@ -29,7 +29,7 @@ interface sender {
     get-connections-by-subject: func(subject: string) -> result<list<msg>, string>;
 
     // Can send a message to an existing connection based on string identifying the connection.
-    send: func(conn: string, payload: list<u8>) -> result<_, string>;
+    send: func(conn: string, payload: list<u8>) -> result<string, string>;
 }
 
 interface receiver {

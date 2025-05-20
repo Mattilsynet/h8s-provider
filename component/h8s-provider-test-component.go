@@ -3,6 +3,7 @@ package main
 
 import (
 	cronjob "github.com/Mattilsynet/h8s-provider/component/gen/mattilsynet/cronjob/cronjob"
+	receiver "github.com/Mattilsynet/h8s-provider/component/gen/mattilsynet/h8s-provider/receiver"
 	requestreply "github.com/Mattilsynet/h8s-provider/component/gen/mattilsynet/h8s-provider/request-reply"
 	sender "github.com/Mattilsynet/h8s-provider/component/gen/mattilsynet/h8s-provider/sender"
 	"github.com/Mattilsynet/h8s-provider/component/gen/mattilsynet/h8s-provider/types"
@@ -29,7 +30,16 @@ func init() {
 			sender.Send(conn.Reply, list)
 
 		}
+	}
 
+	receiver.Exports.HandleMessage = func(msg receiver.Msg) (result cm.Result[string, string, string]) {
+		logger := wasilog.ContextLogger("receiver handle-message")
+		logger.Info(
+			"Receiver payload from websocket connetion",
+			"connection", msg.Reply,
+			"payload", msg.Data)
+
+		return cm.OK[cm.Result[string, string, string]]("ok")
 	}
 
 	requestreply.Exports.HandleMessage = func(msg requestreply.Msg) (result cm.Result[requestreply.MsgShape, types.Msg, string]) {

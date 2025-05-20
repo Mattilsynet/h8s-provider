@@ -53,20 +53,20 @@ spec:
                   host: "localhost"
                   path: "/hello/world"
                   method: "GET"
-        # - type: link
-        #   properties:
-        #     target:
-        #       name: h8s-provider-test-component
-        #     namespace: mattilsynet
-        #     package: h8s-provider
-        #     interfaces: [receiver]
-        #     source_config:
-        #       - name: websocket-receiver
-        #         properties:
-        #           host: "localhost"
-        #           path: "/feed/fromclient"
-        #           method: "ws"
-        #
+        - type: link
+          properties:
+            target:
+              name: h8s-provider-test-component
+            namespace: mattilsynet
+            package: h8s-provider
+            interfaces: [receiver]
+            source_config:
+              - name: websocket-receiver
+                properties:
+                  host: "localhost"
+                  path: "/feed/toclient"
+                  method: "ws"
+
     - name: cronjob
       type: capability
       properties:

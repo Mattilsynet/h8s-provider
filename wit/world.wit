@@ -36,7 +36,8 @@ interface receiver {
     use types.{msg};
 
     // No connection state is required, all request/payload information is contained in the message.
-    receive: func() -> result<msg, string>;
+    // We don't expect anything back from the receiver, except Ok or Err.
+    handle-message: func(msg: msg) -> result<string, string>;
 }
 
 world h8s-provider {

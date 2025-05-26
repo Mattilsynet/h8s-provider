@@ -12,73 +12,83 @@ metadata:
     wasmcloud.dev/categories: |
       capability-provider,provider,h8s,httptonats,tinygo,golang
 spec:
-  components:
-    - name: h8s-provider-test-component
-      type: component
-      properties:
-        image: file://./component/build/h8s-provider-test-component_s.wasm
-      traits:
-        - type: spreadscaler
-          properties:
-            instances: 1
-        - type: link
-          properties:
-            target:
-              name: h8s-provider
-            namespace: mattilsynet
-            package: h8s-provider
-            interfaces: [sender]
-            source_config:
-              - name: websocket-sender
-                properties:
-                  host: "localhost"
-                  path: "/feed/toclient"
-                  method: "ws"
-    - name: h8s-provider
-      type: capability
-      properties:
-        image: file://./build/h8s-provider.par.gz
-        id: h8s-provider
-      traits:
-        - type: link
-          properties:
-            target:
-              name: h8s-provider-test-component
-            namespace: mattilsynet
-            package: h8s-provider
-            interfaces: [request-reply]
-            source_config:
-              - name: test-subjects
-                properties:
-                  host: "localhost"
-                  path: "/hello/world"
-                  method: "GET"
-        - type: link
-          properties:
-            target:
-              name: h8s-provider-test-component
-            namespace: mattilsynet
-            package: h8s-provider
-            interfaces: [receiver]
-            source_config:
-              - name: websocket-receiver
-                properties:
-                  host: "localhost"
-                  path: "/feed/toclient"
-                  method: "ws"
-
-    - name: cronjob
-      type: capability
-      properties:
-        image: ghcr.io/mattilsynet/map-cronjob-provider-wc:v0.0.34
-      traits:
-        - type: link
-          properties:
-            target: h8s-provider-test-component
-            namespace: mattilsynet
-            package: cronjob
-            interfaces: [cron-handler]
-            source_config:
-              - name: log-component-cron-expression
-                properties:
-                  expression: "@every 5s"
+  # policies:
+  #   - name: gotsecrets
+  #     type: policy.secret.wasmcloud.dev/v1alpha1
+  #     properties:
+  #       backend: nats-kv
+  # components:
+  - name: h8s-provider-test-component
+    type: component
+    properties:
+      image: file://./component/build/h8s-provider-test-component_s.wasm
+    traits:
+      - type: spreadscaler
+        properties:
+          instances: 1
+      - type: link
+        properties:
+          target:
+            name: h8s-provider
+          namespace: mattilsynet
+          package: h8s-provider
+          interfaces: [sender]
+          source_config:
+            - name: websocket-sender
+              properties:
+                host: "localhost"
+                path: "/feed/toclient"
+                method: "ws"
+  - name: h8s-provider
+    type: capability
+    properties:
+      image: file://./build/h8s-provider.par.gz
+      id: h8s-provider
+    traits:
+      - type: link
+        properties:
+          target:
+            name: h8s-provider-test-component
+          namespace: mattilsynet
+          package: h8s-provider
+          interfaces: [request-reply]
+          source_config:
+            - name: test-subjects
+              properties:
+                host: "localhost"
+                path: "/hello/world"
+                method: "GET"
+      - type: link
+        properties:
+          target:
+            name: h8s-provider-test-component
+          #   secrets:
+          #     - name: my-first-secret-jallaballa
+          #       properties:
+          #         policy: gotsecrets
+          #         key: my-first-secret
+          # namespace: mattilsynet
+          package: h8s-provider
+          interfaces: [receiver]
+          source_config:
+            - name: websocket-receiver
+              properties:
+                host: "localhost"
+                path: "/feed/toclient"
+                method: "ws"
+  - name: cronjob
+    type: capability
+    properties:
+      image: ghcr.io/mattilsynet/map-cronjob-provider-wc:v0.0.34
+    traits:
+      - type: link
+        properties:
+          target:
+            name: h8s-provider-test-component
+          namespace: mattilsynet
+          package: cronjob
+          interfaces: [cron-handler]
+          source_config:
+            - name: log-component-cron-expression
+              properties:
+                expression: "@every 5s"
